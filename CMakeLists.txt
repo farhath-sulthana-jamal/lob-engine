@@ -18,4 +18,6 @@ target_compile_options(lob-engine PRIVATE
     -Wall
     -Wextra
     -Wpedantic
+    -Wconversion
+    -Wsign-conversion
 )

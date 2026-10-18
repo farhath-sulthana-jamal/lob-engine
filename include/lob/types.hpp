@@ -34,6 +34,12 @@ namespace lob {
             constexpr Qty operator-(Qty other) const noexcept {
                 return Qty{value - other.value};
             }
+            constexpr auto operator<=(Qty other) noexcept {
+                return value <= other.value;
+            }
+            constexpr auto operator>(Qty other) noexcept {
+                return value > other.value;
+            }
     };
 
     class OrderId {

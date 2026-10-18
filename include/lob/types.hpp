@@ -27,6 +27,13 @@ namespace lob {
                 return value;
             }
             auto operator<=>(const Qty&) const = default;
+            constexpr Qty& operator-=(Qty other) noexcept {
+                value -= other.value;
+                return *this;
+            }
+            constexpr Qty operator-(Qty other) const noexcept {
+                return Qty{value - other.value};
+            }
     };
 
     class OrderId {

@@ -17,10 +17,10 @@ target_compile_options(lob_warnings INTERFACE
     -Wsign-conversion
 )
 
-# Header-only library: compiles nothing itself, only carries settings to whoever links it.
-add_library(lob INTERFACE)
+add_library(lob STATIC src/order_book.cpp)
+target_link_libraries(lob PRIVATE lob_warnings)
 
-target_include_directories(lob INTERFACE
+target_include_directories(lob PUBLIC
     include
 )
 
@@ -41,6 +41,7 @@ include(GoogleTest)
 
 add_executable(lob-tests
     tests/types_test.cpp
+    tests/order_book_test.cpp
 )
 
 target_link_libraries(lob-tests PRIVATE

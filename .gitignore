@@ -2,3 +2,4 @@ CLAUDE.md
 build/
 notes/
 compile_commands.json
+.cache/

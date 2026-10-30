@@ -201,3 +201,82 @@ TEST(OrderBookMatchingTest, WorkedExampleFromNotes) {
     ASSERT_EQ(more.size(), 1u);
     expectTrade(more[0], 21, 12, 102, 3);
 }
+
+TEST(OrderIndexTest, RestingOrderReportsFullQty) {
+    OrderBook book;
+    book.add(buy(1, 99, 10));
+
+    auto qty = book.restingQty(OrderId{1});
+    ASSERT_TRUE(qty.has_value());
+    EXPECT_EQ(*qty, Qty{10});
+    EXPECT_EQ(book.orderCount(), 1u);
+}
+
+TEST(OrderIndexTest, UnknownIdHasNoQty) {
+    OrderBook book;
+    book.add(buy(1, 99, 10));
+
+    EXPECT_FALSE(book.restingQty(OrderId{42}).has_value());
+}
+
+TEST(OrderIndexTest, FullyFilledOrdersAreRemoved) {
+    OrderBook book;
+    book.add(sell(1, 101, 5));
+    book.add(buy(2, 101, 5));
+
+    EXPECT_FALSE(book.restingQty(OrderId{1}).has_value());
+    EXPECT_FALSE(book.restingQty(OrderId{2}).has_value());
+    EXPECT_EQ(book.orderCount(), 0u);
+}
+
+TEST(OrderIndexTest, PartiallyFilledRestingOrderShowsRemainder) {
+    OrderBook book;
+    book.add(sell(1, 101, 10));
+    book.add(buy(2, 101, 4));
+
+    auto qty = book.restingQty(OrderId{1});
+    ASSERT_TRUE(qty.has_value());
+    EXPECT_EQ(*qty, Qty{6});
+}
+
+TEST(OrderIndexTest, IncomingRemainderIsIndexed) {
+    OrderBook book;
+    book.add(sell(1, 101, 5));
+    book.add(buy(2, 101, 8));
+
+    auto qty = book.restingQty(OrderId{2});
+    ASSERT_TRUE(qty.has_value());
+    EXPECT_EQ(*qty, Qty{3});
+    EXPECT_EQ(book.orderCount(), 1u);
+}
+
+TEST(OrderIndexTest, OrderCountTracksRestsAndFills) {
+    OrderBook book;
+    book.add(buy(1, 99, 10));
+    book.add(buy(2, 98, 10));
+    book.add(sell(3, 101, 5));
+    book.add(sell(4, 102, 5));
+    EXPECT_EQ(book.orderCount(), 4u);
+
+    book.add(sell(5, 99, 10));
+    EXPECT_EQ(book.orderCount(), 3u);
+
+    book.add(buy(6, 102, 7));
+    EXPECT_EQ(book.orderCount(), 2u);
+    EXPECT_FALSE(book.restingQty(OrderId{3}).has_value());
+    ASSERT_TRUE(book.restingQty(OrderId{4}).has_value());
+    EXPECT_EQ(*book.restingQty(OrderId{4}), Qty{3});
+}
+
+TEST(OrderIndexTest, LocatorSurvivesOtherBookChanges) {
+    OrderBook book;
+    book.add(sell(1, 105, 10));
+    for (std::uint64_t id = 2; id <= 50; ++id) {
+        book.add(sell(id, 101 + static_cast<std::int64_t>(id % 4), 1));
+    }
+    book.add(buy(100, 104, 30));
+
+    auto qty = book.restingQty(OrderId{1});
+    ASSERT_TRUE(qty.has_value());
+    EXPECT_EQ(*qty, Qty{10});
+}

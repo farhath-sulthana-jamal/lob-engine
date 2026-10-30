@@ -1,7 +1,9 @@
 #pragma once
 
-#include <cstdint>
 #include <compare>
+#include <cstddef>
+#include <cstdint>
+#include <functional>
 
 namespace lob {
     // Price in integer ticks (no floats: 0.1+0.2 != 0.3). Signed because real prices can go
@@ -33,12 +35,6 @@ namespace lob {
             }
             constexpr Qty operator-(Qty other) const noexcept {
                 return Qty{value - other.value};
-            }
-            constexpr auto operator<=(Qty other) noexcept {
-                return value <= other.value;
-            }
-            constexpr auto operator>(Qty other) noexcept {
-                return value > other.value;
             }
     };
 
@@ -76,3 +72,10 @@ namespace lob {
     static_assert(sizeof(Trade) == 32);
 
 } // namespace lob
+
+template <>
+struct std::hash<lob::OrderId> {
+    std::size_t operator()(lob::OrderId id) const noexcept {
+        return std::hash<std::uint64_t>{}(id.getValue());
+    }
+};

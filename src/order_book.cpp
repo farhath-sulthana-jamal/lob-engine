@@ -113,4 +113,20 @@ namespace lob {
         return true;
     }
 
+    std::vector<Trade> OrderBook::modify(OrderId id, Price new_price, Qty new_qty) {
+        assert(new_qty > Qty{0});
+        auto entry = index.find(id);
+        if (entry == index.end()) {
+            return {};
+        }
+        auto& order = *entry->second.position;
+        if (new_price == order.price && new_qty <= order.qty) {
+            order.qty = new_qty;
+            return {};
+        }
+        auto side = order.side;
+        cancel(id);
+        return add(Order {id, new_price, new_qty, side});
+    }
+
 } // namespace lob

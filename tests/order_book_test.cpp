@@ -373,3 +373,102 @@ TEST(OrderCancelTest, CancelledOrderNoLongerTrades) {
     ASSERT_EQ(trades.size(), 1u);
     expectTrade(trades[0], 3, 2, 102, 5);
 }
+
+TEST(OrderModifyTest, ModifyUnknownIdDoesNothing) {
+    OrderBook book;
+    book.add(buy(1, 100, 10));
+
+    auto trades = book.modify(OrderId{9}, Price{101}, Qty{5});
+
+    EXPECT_TRUE(trades.empty());
+    EXPECT_FALSE(book.restingQty(OrderId{9}).has_value());
+    EXPECT_EQ(book.orderCount(), 1u);
+}
+
+TEST(OrderModifyTest, ReduceQtyKeepsPriority) {
+    OrderBook book;
+    book.add(sell(1, 101, 10));
+    book.add(sell(2, 101, 10));
+
+    auto modifyTrades = book.modify(OrderId{1}, Price{101}, Qty{4});
+    EXPECT_TRUE(modifyTrades.empty());
+    EXPECT_EQ(book.restingQty(OrderId{1}), Qty{4});
+
+    auto trades = book.add(buy(3, 101, 4));
+    ASSERT_EQ(trades.size(), 1u);
+    expectTrade(trades[0], 3, 1, 101, 4);
+}
+
+TEST(OrderModifyTest, IncreaseQtyLosesPriority) {
+    OrderBook book;
+    book.add(sell(1, 101, 5));
+    book.add(sell(2, 101, 5));
+
+    auto modifyTrades = book.modify(OrderId{1}, Price{101}, Qty{8});
+    EXPECT_TRUE(modifyTrades.empty());
+    EXPECT_EQ(book.restingQty(OrderId{1}), Qty{8});
+
+    auto trades = book.add(buy(3, 101, 5));
+    ASSERT_EQ(trades.size(), 1u);
+    expectTrade(trades[0], 3, 2, 101, 5);
+}
+
+TEST(OrderModifyTest, PriceChangeMovesOrderToNewLevel) {
+    OrderBook book;
+    book.add(buy(1, 100, 10));
+    book.add(buy(2, 99, 10));
+
+    auto trades = book.modify(OrderId{1}, Price{98}, Qty{10});
+
+    EXPECT_TRUE(trades.empty());
+    auto bestBid = book.bestBid();
+    ASSERT_TRUE(bestBid.has_value());
+    EXPECT_EQ(*bestBid, Price{99});
+    EXPECT_EQ(book.restingQty(OrderId{1}), Qty{10});
+    EXPECT_EQ(book.orderCount(), 2u);
+}
+
+TEST(OrderModifyTest, CrossingPriceChangeTrades) {
+    OrderBook book;
+    book.add(sell(1, 101, 5));
+    book.add(buy(2, 100, 8));
+
+    auto trades = book.modify(OrderId{2}, Price{101}, Qty{8});
+
+    ASSERT_EQ(trades.size(), 1u);
+    expectTrade(trades[0], 2, 1, 101, 5);
+    EXPECT_FALSE(book.bestAsk().has_value());
+    EXPECT_EQ(book.restingQty(OrderId{2}), Qty{3});
+    auto bestBid = book.bestBid();
+    ASSERT_TRUE(bestBid.has_value());
+    EXPECT_EQ(*bestBid, Price{101});
+}
+
+TEST(OrderModifyTest, ModifyPartiallyFilledOrder) {
+    OrderBook book;
+    book.add(sell(1, 101, 10));
+    book.add(buy(2, 101, 6));
+
+    auto modifyTrades = book.modify(OrderId{1}, Price{101}, Qty{2});
+    EXPECT_TRUE(modifyTrades.empty());
+    EXPECT_EQ(book.restingQty(OrderId{1}), Qty{2});
+}
+
+TEST(OrderModifyTest, SellIncreaseQtyAtNewPriceSweepsTwoLevels) {
+    OrderBook book;
+    book.add(buy(1, 100, 5));
+    book.add(buy(2, 99, 5));
+    book.add(sell(3, 105, 4));
+
+    auto trades = book.modify(OrderId{3}, Price{99}, Qty{12});
+
+    ASSERT_EQ(trades.size(), 2u);
+    expectTrade(trades[0], 1, 3, 100, 5);
+    expectTrade(trades[1], 2, 3, 99, 5);
+    EXPECT_FALSE(book.bestBid().has_value());
+    EXPECT_EQ(book.restingQty(OrderId{3}), Qty{2});
+    auto bestAsk = book.bestAsk();
+    ASSERT_TRUE(bestAsk.has_value());
+    EXPECT_EQ(*bestAsk, Price{99});
+    EXPECT_EQ(book.orderCount(), 1u);
+}

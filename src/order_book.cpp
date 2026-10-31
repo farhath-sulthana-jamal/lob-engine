@@ -86,4 +86,31 @@ namespace lob {
         return trades;
     }
 
+    bool OrderBook::cancel(OrderId id) {
+        auto entry = index.find(id);
+        if (entry == index.end()) {
+            return false;
+        }
+        auto& locator = entry->second;
+        if (locator.side == Side::Buy) {
+            auto level = bids.find(locator.price);
+            assert(level != bids.end());
+            auto& orders = level->second;
+            orders.erase(locator.position);
+            if (orders.empty()) {
+                bids.erase(level);
+            }
+        } else {
+            auto level = asks.find(locator.price);
+            assert(level != asks.end());
+            auto& orders = level->second;
+            orders.erase(locator.position);
+            if (orders.empty()) {
+                asks.erase(level);
+            }
+        }
+        index.erase(entry);
+        return true;
+    }
+
 } // namespace lob

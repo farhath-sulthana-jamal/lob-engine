@@ -25,6 +25,7 @@ namespace lob {
         std::optional<Price> bestBid() const noexcept;
         std::optional<Price> bestAsk() const noexcept;
         std::vector<Trade> add(Order order);
+        bool cancel(OrderId id);
         std::optional<Qty> restingQty(OrderId id) const;
         std::size_t orderCount() const noexcept;
     };

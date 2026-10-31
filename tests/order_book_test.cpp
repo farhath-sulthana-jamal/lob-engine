@@ -280,3 +280,96 @@ TEST(OrderIndexTest, LocatorSurvivesOtherBookChanges) {
     ASSERT_TRUE(qty.has_value());
     EXPECT_EQ(*qty, Qty{10});
 }
+
+TEST(OrderCancelTest, CancelRemovesRestingOrder) {
+    OrderBook book;
+    book.add(buy(1, 99, 10));
+
+    EXPECT_TRUE(book.cancel(OrderId{1}));
+    EXPECT_FALSE(book.restingQty(OrderId{1}).has_value());
+    EXPECT_FALSE(book.bestBid().has_value());
+    EXPECT_EQ(book.orderCount(), 0u);
+}
+
+TEST(OrderCancelTest, CancelUnknownIdReturnsFalse) {
+    OrderBook book;
+    book.add(buy(1, 99, 10));
+
+    EXPECT_FALSE(book.cancel(OrderId{42}));
+    EXPECT_EQ(book.orderCount(), 1u);
+}
+
+TEST(OrderCancelTest, CancelTwiceReturnsFalseSecondTime) {
+    OrderBook book;
+    book.add(sell(1, 101, 10));
+
+    EXPECT_TRUE(book.cancel(OrderId{1}));
+    EXPECT_FALSE(book.cancel(OrderId{1}));
+}
+
+TEST(OrderCancelTest, CancelFilledOrderReturnsFalse) {
+    OrderBook book;
+    book.add(sell(1, 101, 5));
+    book.add(buy(2, 101, 5));
+
+    EXPECT_FALSE(book.cancel(OrderId{1}));
+    EXPECT_FALSE(book.cancel(OrderId{2}));
+}
+
+TEST(OrderCancelTest, CancelPartiallyFilledOrder) {
+    OrderBook book;
+    book.add(sell(1, 101, 10));
+    book.add(buy(2, 101, 4));
+
+    EXPECT_TRUE(book.cancel(OrderId{1}));
+    EXPECT_FALSE(book.bestAsk().has_value());
+    EXPECT_EQ(book.orderCount(), 0u);
+}
+
+TEST(OrderCancelTest, CancelMiddleOfQueueKeepsFifo) {
+    OrderBook book;
+    book.add(sell(1, 101, 5));
+    book.add(sell(2, 101, 5));
+    book.add(sell(3, 101, 5));
+
+    EXPECT_TRUE(book.cancel(OrderId{2}));
+    auto trades = book.add(buy(4, 101, 10));
+
+    ASSERT_EQ(trades.size(), 2u);
+    expectTrade(trades[0], 4, 1, 101, 5);
+    expectTrade(trades[1], 4, 3, 101, 5);
+}
+
+TEST(OrderCancelTest, CancelOnlyOrderAtBestBidMovesBestBid) {
+    OrderBook book;
+    book.add(buy(1, 100, 10));
+    book.add(buy(2, 99, 10));
+
+    EXPECT_TRUE(book.cancel(OrderId{1}));
+    auto bestBid = book.bestBid();
+    ASSERT_TRUE(bestBid.has_value());
+    EXPECT_EQ(*bestBid, Price{99});
+}
+
+TEST(OrderCancelTest, CancelOnlyOrderAtBestAskMovesBestAsk) {
+    OrderBook book;
+    book.add(sell(1, 101, 10));
+    book.add(sell(2, 102, 10));
+
+    EXPECT_TRUE(book.cancel(OrderId{1}));
+    auto bestAsk = book.bestAsk();
+    ASSERT_TRUE(bestAsk.has_value());
+    EXPECT_EQ(*bestAsk, Price{102});
+}
+
+TEST(OrderCancelTest, CancelledOrderNoLongerTrades) {
+    OrderBook book;
+    book.add(sell(1, 101, 5));
+    book.add(sell(2, 102, 5));
+
+    EXPECT_TRUE(book.cancel(OrderId{1}));
+    auto trades = book.add(buy(3, 102, 5));
+
+    ASSERT_EQ(trades.size(), 1u);
+    expectTrade(trades[0], 3, 2, 102, 5);
+}
